@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+
+# Data files (too large for git)
+data/*.csv
+
+# Model artifacts
+artifacts/*.pkl
+artifacts/*.joblib
+
+# Environment
+.env
+.venv/
+venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Plots giữ lại (không ignore)
+!artifacts/plots/.gitkeep
