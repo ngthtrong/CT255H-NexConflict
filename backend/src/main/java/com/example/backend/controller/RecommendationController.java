@@ -27,8 +27,8 @@ public class RecommendationController {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         String email = auth.getName();
         User user = userRepository.findByEmail(email).orElseThrow(() -> new RuntimeException("User not found"));
-        
-        return recommendationService.getRecommendationsForUser(user.getId());
+
+        return recommendationService.getRecommendationsForUser(user);
     }
 
     @GetMapping("/similar/{movieId}")

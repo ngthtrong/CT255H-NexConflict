@@ -17,6 +17,10 @@ public class Movie {
 
     private String posterUrl;
 
+    private Long tmdbId;
+
+    private String imdbId;
+
     public Movie() {
     }
 
@@ -57,5 +61,21 @@ public class Movie {
 
     public void setPosterUrl(String posterUrl) {
         this.posterUrl = posterUrl;
+    }
+
+    public Long getTmdbId() {
+        return tmdbId;
+    }
+
+    public void setTmdbId(Long tmdbId) {
+        this.tmdbId = tmdbId;
+    }
+
+    public String getImdbId() {
+        return imdbId;
+    }
+
+    public void setImdbId(String imdbId) {
+        this.imdbId = imdbId;
     }
 }

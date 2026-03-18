@@ -37,10 +37,13 @@ export default function Home() {
           try {
             console.log("Page: Fetching recommendations for user:", user);
             const recRes = await api.get('/recommendations/for-you');
+            console.log("Page: Recommendations received:", recRes.data);
             setRecommendations(recRes.data || []);
           } catch (recError) {
             console.error('Failed to fetch recommendations', recError);
           }
+        } else {
+          console.log("Page: No user, skipping recommendations");
         }
       } catch (error: any) {
         console.error('Failed to fetch movies', error);

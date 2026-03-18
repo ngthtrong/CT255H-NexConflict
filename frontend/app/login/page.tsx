@@ -21,10 +21,13 @@ export default function LoginPage() {
 
     try {
       const response = await api.post('/auth/login', { email, password });
-      // Expecting { token: "..." } from backend
       if (response.data && response.data.accessToken) {
-        login(response.data.accessToken);
-        router.push('/');
+        const success = await login(response.data.accessToken);
+        if (success) {
+          router.push('/');
+        } else {
+          setError('Login failed: Could not fetch user profile');
+        }
       } else {
         setError('Login failed: No token received');
       }

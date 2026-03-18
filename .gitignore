@@ -35,3 +35,6 @@ Thumbs.db
 
 # Plots giữ lại (không ignore)
 !artifacts/plots/.gitkeep
+
+# Next
+frontend/.next_temp_build/
