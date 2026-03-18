@@ -46,10 +46,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const fetchUserProfile = async () => {
     try {
-      // If we had a /users/me endpoint:
-      // const res = await api.get('/users/me');
-      // setUser(res.data);
-      setUser({ id: 1, email: 'user@example.com', fullName: 'User' }); // Mock
+      const res = await api.get('/users/me');
+      setUser(res.data);
     } catch (err) {
       localStorage.removeItem('token');
     } finally {

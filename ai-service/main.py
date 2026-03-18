@@ -30,69 +30,57 @@ movie_id_to_index = {} # For cosine logic
 
 # --- Data Loading & Model Training Functions ---
 
-def load_data():
-    global movies_df, movie_id_to_index
-    
-    # Paths - Update these to point to your actual data location
-    # Assuming ai-service is at root, and data is in ../data/ or ./data
-    # Trying absolute or relative paths
-    possible_paths = [
-        "../data/movies.csv", 
-        "data/movies.csv",
-        "../../data/movies.csv",
-        r"D:\CT255H - BI\Project\CT255H-NexConflict\data\movies.csv"
+def _find_file(filename: str) -> str | None:
+    """Search common relative paths for a data file and return the first match."""
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    candidates = [
+        os.path.join(base_dir, "..", "data", filename),
+        os.path.join(base_dir, "data", filename),
+        os.path.join(base_dir, "..", "..", "data", filename),
     ]
-    
-    movies_path = None
-    for p in possible_paths:
-        if os.path.exists(p):
-            movies_path = p
-            break
-            
+    for p in candidates:
+        norm = os.path.normpath(p)
+        if os.path.exists(norm):
+            return norm
+    return None
+
+def load_data():
+    global movies_df, movie_id_to_index, indices
+
+    movies_path = _find_file("movies.csv")
+
     if not movies_path:
         logger.error("movies.csv not found!")
         # Create dummy data if file missing to prevent crash
         movies_df = pd.DataFrame({
-            'movieId': [1, 2, 3], 
+            'movieId': [1, 2, 3],
             'title': ['Toy Story (1995)', 'Jumanji (1995)', 'Grumpier Old Men (1995)'],
             'genres': ['Adventure|Animation|Children|Comedy|Fantasy', 'Adventure|Children|Fantasy', 'Comedy|Romance']
         })
     else:
         logger.info(f"Loading movies from {movies_path}")
         movies_df = pd.read_csv(movies_path)
-        
+
     # Create mapping for Cosine Similarity
     # Reset index to ensure linear 0..N indexing for matrix
     movies_df = movies_df.reset_index(drop=True)
     indices = pd.Series(movies_df.index, index=movies_df['movieId'])
-    
+
     # Also create a reverse map if needed
+    movie_id_to_index.clear()
     for idx, row in movies_df.iterrows():
-        movie_id_to_index[row['movieId']] = idx
+        movie_id_to_index[int(row['movieId'])] = idx
 
 def train_svd():
     global svd_model
-    logger.info("Training SVD Model (Mock/Light)...")
-    
-    # In a real scenario, load ratings.csv. 
-    # For this MVP startup, we will train on a tiny subset or dummy if file too big/missing
-    # to allow fast server start.
-    
-    # Try finding ratings.csv
-    possible_paths = [
-        "../data/ratings.csv", 
-        "data/ratings.csv",
-        "../../data/ratings.csv",
-        r"D:\CT255H - BI\Project\CT255H-NexConflict\data\ratings.csv"
-    ]
-    ratings_path = None
-    for p in possible_paths:
-        if os.path.exists(p):
-            ratings_path = p
-            break
-            
+    if not SURPRISE_AVAILABLE:
+        logger.warning("scikit-surprise not available. Skipping SVD training.")
+        return
+
+    ratings_path = _find_file("ratings.csv")
+
     if ratings_path:
-         # Load ONLY first 100k rows for speed in MVP/Dev
+        # Load ONLY first 100k rows for speed in MVP/Dev
         logger.info(f"Loading ratings from {ratings_path} (limit 100k)")
         df = pd.read_csv(ratings_path, nrows=100000)
         reader = Reader(rating_scale=(0.5, 5.0))
@@ -108,7 +96,7 @@ def train_svd():
 def build_content_filtering():
     global cosine_sim_matrix
     logger.info("Building Content-Based Matrix...")
-    
+
     if movies_df is None:
         return
 
@@ -118,19 +106,15 @@ def build_content_filtering():
         movies_df['genres_str'] = movies_df['genres'].fillna('').str.replace('|', ' ')
         tfidf = TfidfVectorizer(stop_words='english')
         tfidf_matrix = tfidf.fit_transform(movies_df['genres_str'])
-        cosine_sim_matrix = cosine_similarity(tfidf_matrix, tfidf_matrix) # Might be heavy on memory for 20M
+        cosine_sim_matrix = cosine_similarity(tfidf_matrix, tfidf_matrix)
         logger.info(f"Cosine Matrix built: {cosine_sim_matrix.shape}")
 
 # --- Startup ---
 @app.on_event("startup")
 def startup_event():
     load_data()
-    # Uncomment lines below to enable real training (takes time)
-    # train_svd()
-    # build_content_filtering() 
-    
-    # Mocking for fast response if models not loaded
-    pass
+    train_svd()
+    build_content_filtering()
 
 # --- API Endpoints ---
 
@@ -144,11 +128,20 @@ def get_recommendations(user_id: int):
     Get generic personalized recommendations using SVD.
     Returns list of Movie IDs.
     """
-    if svd_model:
-        # Predict logic here
-        pass
-    
-    # Mock return for visual validation
+    if svd_model and movies_df is not None and SURPRISE_AVAILABLE:
+        try:
+            all_movie_ids = movies_df['movieId'].tolist()
+            # Predict ratings for all movies and pick the top 10
+            predictions = [svd_model.predict(user_id, mid) for mid in all_movie_ids]
+            predictions.sort(key=lambda x: x.est, reverse=True)
+            top_ids = [int(p.iid) for p in predictions[:10]]
+            return top_ids
+        except Exception as e:
+            logger.error(f"SVD prediction failed: {e}")
+
+    # Fallback: return first 10 movie IDs from the dataset
+    if movies_df is not None:
+        return movies_df['movieId'].head(10).astype(int).tolist()
     return [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
 
 @app.get("/similar/{movie_id}")
@@ -156,8 +149,25 @@ def get_similar_movies(movie_id: int):
     """
     Get similar movies based on content (genres).
     """
-    # Simple Mock: Return next 5 movies sequentially
+    if cosine_sim_matrix is not None and movie_id in movie_id_to_index:
+        idx = movie_id_to_index[movie_id]
+        sim_scores = list(enumerate(cosine_sim_matrix[idx]))
+        sim_scores = sorted(sim_scores, key=lambda x: x[1], reverse=True)
+        # Exclude itself; take top 5
+        sim_scores = [s for s in sim_scores if s[0] != idx][:5]
+        similar_ids = [int(movies_df.iloc[i[0]]['movieId']) for i in sim_scores]
+        return similar_ids
+
+    # Fallback: return next 5 sequential movie IDs
+    if movies_df is not None:
+        all_ids = movies_df['movieId'].tolist()
+        try:
+            pos = all_ids.index(movie_id)
+            return [int(mid) for mid in all_ids[pos + 1: pos + 6]]
+        except ValueError:
+            pass
     return [movie_id + 1, movie_id + 2, movie_id + 3, movie_id + 4, movie_id + 5]
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+
