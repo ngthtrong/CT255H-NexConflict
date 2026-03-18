@@ -3,19 +3,21 @@ package com.example.backend.security;
 import java.security.Key;
 import java.util.Date;
 
-import javax.management.relation.Role;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Component;
+
+import com.example.backend.dto.Role;
 
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
 import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Component;
 import lombok.extern.slf4j.Slf4j;
 
 // Using @Component because this class have a Value that using Dependency Injection
 @Component
+@Slf4j
 public class JwtUtil {
     @Value("${myapp.jwt.secret}")
     private String secretKey;
@@ -80,6 +82,15 @@ public class JwtUtil {
             // Trade-off: Do not leak the exact stack trace to the client. 
             // Throw a generic security exception to be handled by your GlobalExceptionHandler.
             throw new SecurityException("Unauthorized access: Token payload processing failed");
+        }
+    }
+    public boolean validationToken(String token){
+        try {
+            Jwts.parserBuilder().setSigningKey(getSignInKey())
+                                .build().parseClaimsJws(token);
+            return true;
+        } catch (Exception e) {
+            return false;
         }
     }
 
