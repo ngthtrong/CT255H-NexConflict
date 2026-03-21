@@ -22,7 +22,7 @@ Thuật toán Lọc cộng tác (Collaborative Filtering - SVD) dự đoán và 
 
 ### 3.1. Màn hình Auth (Login/Register)
 
-* Giao diện đăng nhập, đăng ký tài khoản (JWT/OAuth2).
+* Giao diện đăng nhập, đăng ký tài khoản (JWT).
 
 ### 3.2. Màn hình Onboarding
 

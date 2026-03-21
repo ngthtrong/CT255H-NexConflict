@@ -24,7 +24,17 @@ export default function LoginPage() {
       if (response.data && response.data.accessToken) {
         const success = await login(response.data.accessToken);
         if (success) {
-          router.push('/');
+          // Check onboarding status and redirect accordingly
+          try {
+            const statusRes = await api.get('/onboarding/status');
+            if (!statusRes.data.onboardingCompleted) {
+              router.push('/onboarding');
+            } else {
+              router.push('/');
+            }
+          } catch {
+            router.push('/');
+          }
         } else {
           setError('Login failed: Could not fetch user profile');
         }

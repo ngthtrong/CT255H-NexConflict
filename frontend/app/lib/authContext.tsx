@@ -10,6 +10,7 @@ interface User {
   email: string;
   fullName: string;
   username?: string;
+  onboardingCompleted?: boolean;
 }
 
 interface AuthContextType {
@@ -17,6 +18,7 @@ interface AuthContextType {
   loading: boolean;
   login: (token: string) => Promise<boolean>;
   logout: () => void;
+  refreshUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -24,6 +26,7 @@ const AuthContext = createContext<AuthContextType>({
   loading: true,
   login: async () => false,
   logout: () => {},
+  refreshUser: async () => {},
 });
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -53,7 +56,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         id: userData.id,
         email: userData.email,
         fullName: userData.fullName,
-        username: userData.fullName || userData.email.split('@')[0]
+        username: userData.fullName || userData.email.split('@')[0],
+        onboardingCompleted: userData.onboardingCompleted || false
       });
       return true;
     } catch (err) {
@@ -64,6 +68,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } finally {
       setLoading(false);
     }
+  };
+
+  const refreshUser = async () => {
+    await fetchUserProfile();
   };
 
   const login = async (token: string): Promise<boolean> => {
@@ -82,7 +90,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout }}>
+    <AuthContext.Provider value={{ user, loading, login, logout, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );

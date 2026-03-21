@@ -21,6 +21,9 @@ public class User {
 
     private String role; // ROLE_USER
 
+    @Column(name = "onboarding_completed")
+    private Boolean onboardingCompleted = false;
+
     @Column(name = "created_at")
     private LocalDateTime createdAt;
 
@@ -85,5 +88,13 @@ public class User {
 
     public void setCreatedAt(LocalDateTime createdAt) {
         this.createdAt = createdAt;
+    }
+
+    public Boolean getOnboardingCompleted() {
+        return onboardingCompleted;
+    }
+
+    public void setOnboardingCompleted(Boolean onboardingCompleted) {
+        this.onboardingCompleted = onboardingCompleted;
     }
 }

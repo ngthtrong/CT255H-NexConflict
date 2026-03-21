@@ -34,6 +34,7 @@ public class UserController {
         response.put("fullName", user.getFullName());
         response.put("role", user.getRole());
         response.put("createdAt", user.getCreatedAt());
+        response.put("onboardingCompleted", user.getOnboardingCompleted() != null && user.getOnboardingCompleted());
 
         return ResponseEntity.ok(response);
     }

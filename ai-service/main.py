@@ -4,9 +4,10 @@ import uvicorn
 import pandas as pd
 import numpy as np
 import os
+import joblib
+
 try:
     from surprise import Dataset, Reader, SVD
-    from surprise.model_selection import train_test_split
     SURPRISE_AVAILABLE = True
 except ImportError:
     SURPRISE_AVAILABLE = False
@@ -39,6 +40,9 @@ ratings_df = None
 movie_id_to_index = {}
 index_to_movie_id = {}
 
+# --- Paths ---
+MODEL_DIR = os.path.join(os.path.dirname(__file__), 'models')
+
 # --- Helper Functions ---
 def find_file(filename):
     possible_paths = [
@@ -52,9 +56,63 @@ def find_file(filename):
             return p
     return None
 
-# --- Data Loading & Model Training Functions ---
-def load_data():
-    global movies_df, ratings_df, movie_id_to_index, index_to_movie_id
+# --- Model Loading Functions (load từ file đã train sẵn) ---
+def load_models():
+    """Load pre-trained models từ thư mục models/"""
+    global svd_model, cosine_sim_matrix, movies_df, ratings_df
+    global movie_id_to_index, index_to_movie_id
+
+    if not os.path.exists(MODEL_DIR):
+        logger.warning(f"Thư mục models/ không tồn tại: {MODEL_DIR}")
+        logger.warning("Hãy chạy 'python train.py' trước để train model!")
+        return False
+
+    loaded = False
+
+    # Load SVD model
+    svd_path = os.path.join(MODEL_DIR, 'svd_model.pkl')
+    if os.path.exists(svd_path):
+        svd_model = joblib.load(svd_path)
+        logger.info(f"✅ Đã load SVD model từ {svd_path}")
+        loaded = True
+    else:
+        logger.warning("SVD model không tìm thấy")
+
+    # Load ratings DataFrame
+    ratings_path = os.path.join(MODEL_DIR, 'ratings_df.pkl')
+    if os.path.exists(ratings_path):
+        ratings_df = joblib.load(ratings_path)
+        logger.info(f"✅ Đã load ratings DataFrame ({len(ratings_df)} rows)")
+
+    # Load cosine similarity matrix
+    cosine_path = os.path.join(MODEL_DIR, 'cosine_sim_matrix.pkl')
+    if os.path.exists(cosine_path):
+        cosine_sim_matrix = joblib.load(cosine_path)
+        logger.info(f"✅ Đã load Cosine Similarity matrix: {cosine_sim_matrix.shape}")
+        loaded = True
+
+    # Load movies DataFrame
+    movies_pkl_path = os.path.join(MODEL_DIR, 'movies_df.pkl')
+    if os.path.exists(movies_pkl_path):
+        movies_df = joblib.load(movies_pkl_path)
+        logger.info(f"✅ Đã load movies DataFrame ({len(movies_df)} phim)")
+
+    # Load mappings
+    mapping_path = os.path.join(MODEL_DIR, 'mappings.pkl')
+    if os.path.exists(mapping_path):
+        mappings = joblib.load(mapping_path)
+        movie_id_to_index = mappings['movie_id_to_index']
+        index_to_movie_id = mappings['index_to_movie_id']
+        logger.info(f"✅ Đã load mappings ({len(movie_id_to_index)} phim)")
+
+    return loaded
+
+def fallback_train():
+    """Fallback: train trực tiếp nếu không có model file (giống logic cũ)."""
+    global svd_model, cosine_sim_matrix, movies_df, ratings_df
+    global movie_id_to_index, index_to_movie_id
+
+    logger.info("⚠️ Không tìm thấy model đã train. Đang train trực tiếp...")
 
     # Load movies
     movies_path = find_file("movies.csv")
@@ -63,83 +121,56 @@ def load_data():
         movies_df = pd.DataFrame({
             'movieId': [1, 2, 3],
             'title': ['Toy Story (1995)', 'Jumanji (1995)', 'Grumpier Old Men (1995)'],
-            'genres': ['Adventure|Animation|Children|Comedy|Fantasy', 'Adventure|Children|Fantasy', 'Comedy|Romance']
+            'genres': ['Adventure|Animation|Children|Comedy|Fantasy',
+                       'Adventure|Children|Fantasy', 'Comedy|Romance']
         })
     else:
-        logger.info(f"Loading movies from {movies_path}")
         movies_df = pd.read_csv(movies_path)
 
-    # Reset index for consistent indexing
     movies_df = movies_df.reset_index(drop=True)
-
-    # Create mappings
     for idx, row in movies_df.iterrows():
         movie_id_to_index[row['movieId']] = idx
         index_to_movie_id[idx] = row['movieId']
 
-    logger.info(f"Loaded {len(movies_df)} movies")
+    # Train SVD
+    if SURPRISE_AVAILABLE:
+        ratings_path = find_file("ratings.csv")
+        if ratings_path:
+            try:
+                ratings_df = pd.read_csv(ratings_path, nrows=200000)
+                reader = Reader(rating_scale=(0.5, 5.0))
+                data = Dataset.load_from_df(
+                    ratings_df[['userId', 'movieId', 'rating']], reader)
+                trainset = data.build_full_trainset()
+                svd = SVD(n_factors=100, n_epochs=20, random_state=42)
+                svd.fit(trainset)
+                svd_model = svd
+                logger.info("SVD trained (fallback)")
+            except Exception as e:
+                logger.error(f"SVD training failed: {e}")
 
-def train_svd():
-    global svd_model, ratings_df
-
-    if not SURPRISE_AVAILABLE:
-        logger.warning("Surprise library not available. SVD model disabled.")
-        return
-
-    logger.info("Training SVD Model...")
-
-    ratings_path = find_file("ratings.csv")
-    if not ratings_path:
-        logger.warning("ratings.csv not found. SVD model will be None")
-        return
-
-    try:
-        # Load ratings (limit for faster training)
-        logger.info(f"Loading ratings from {ratings_path} (limit 200k rows)")
-        ratings_df = pd.read_csv(ratings_path, nrows=200000)
-
-        reader = Reader(rating_scale=(0.5, 5.0))
-        data = Dataset.load_from_df(ratings_df[['userId', 'movieId', 'rating']], reader)
-        trainset = data.build_full_trainset()
-
-        svd = SVD(n_factors=100, n_epochs=20, random_state=42)
-        svd.fit(trainset)
-        svd_model = svd
-
-        logger.info("SVD Model trained successfully!")
-    except Exception as e:
-        logger.error(f"Failed to train SVD: {e}")
-
-def build_content_filtering():
-    global cosine_sim_matrix
-
-    if movies_df is None or movies_df.empty:
-        logger.warning("No movies data for content filtering")
-        return
-
-    logger.info("Building Content-Based Matrix...")
-
-    try:
-        # Use Genres for content-based filtering
-        if 'genres' in movies_df.columns:
-            movies_df['genres_str'] = movies_df['genres'].fillna('').str.replace('|', ' ', regex=False)
+    # Build content filtering
+    if 'genres' in movies_df.columns:
+        try:
+            movies_df['genres_str'] = movies_df['genres'].fillna('').str.replace(
+                '|', ' ', regex=False)
             tfidf = TfidfVectorizer(stop_words='english')
             tfidf_matrix = tfidf.fit_transform(movies_df['genres_str'])
-
-            # Only compute for first 5000 movies to save memory
             max_movies = min(5000, tfidf_matrix.shape[0])
-            cosine_sim_matrix = cosine_similarity(tfidf_matrix[:max_movies], tfidf_matrix[:max_movies])
-
-            logger.info(f"Cosine Matrix built: {cosine_sim_matrix.shape}")
-    except Exception as e:
-        logger.error(f"Failed to build content filtering: {e}")
+            cosine_sim_matrix = cosine_similarity(
+                tfidf_matrix[:max_movies], tfidf_matrix[:max_movies])
+            logger.info(f"Cosine matrix built (fallback): {cosine_sim_matrix.shape}")
+        except Exception as e:
+            logger.error(f"Content filtering failed: {e}")
 
 # --- Startup ---
 @app.on_event("startup")
 def startup_event():
-    load_data()
-    train_svd()
-    build_content_filtering()
+    # Ưu tiên load model đã train sẵn
+    success = load_models()
+    if not success:
+        # Fallback: train trực tiếp (như logic cũ)
+        fallback_train()
     logger.info("AI Service ready!")
 
 # --- API Endpoints ---

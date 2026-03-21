@@ -221,10 +221,15 @@ export default function MovieDetailPage() {
             </div>
           </div>
 
-          {/* Similar Movies */}
+          {/* More Like This (Content-Based Filtering using genome-scores) */}
           {similarMovies.length > 0 && (
             <div className="mt-16">
-              <h2 className="text-2xl font-bold mb-6">Similar Movies</h2>
+              <h2 className="text-2xl font-bold mb-2 flex items-center gap-2">
+                <span className="text-red-500">🎯</span> More Like This
+              </h2>
+              <p className="text-zinc-500 text-sm mb-6">
+                Movies with similar themes and content
+              </p>
               <div className="grid grid-cols-2 gap-x-4 gap-y-8 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:gap-x-8">
                 {similarMovies.map((m) => (
                   <MovieCard key={m.id} movie={m} />

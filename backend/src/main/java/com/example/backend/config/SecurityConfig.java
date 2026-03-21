@@ -65,7 +65,10 @@ public class SecurityConfig {
                         .requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers("/api/movies/**").permitAll()
                         .requestMatchers("/api/recommendations/similar/**").permitAll()
+                        .requestMatchers("/api/recommendations/trending").permitAll()
                         .requestMatchers("/api/ratings/movie/**").permitAll()
+                        .requestMatchers("/api/onboarding/genres").permitAll()
+                        .requestMatchers("/api/onboarding/popular-movies").permitAll()
                         .requestMatchers("/h2-console/**").permitAll()
                         .anyRequest().authenticated()
                 );
