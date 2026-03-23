@@ -72,9 +72,18 @@ def load_models():
     # Load SVD model
     svd_path = os.path.join(MODEL_DIR, 'svd_model.pkl')
     if os.path.exists(svd_path):
-        svd_model = joblib.load(svd_path)
-        logger.info(f"✅ Đã load SVD model từ {svd_path}")
-        loaded = True
+        try:
+            svd_model = joblib.load(svd_path)
+            logger.info(f"✅ Đã load SVD model từ {svd_path}")
+            loaded = True
+        except ModuleNotFoundError as e:
+            # Compatible fallback when pre-trained SVD was saved with surprise
+            # but current environment does not have surprise installed.
+            logger.warning(f"Không thể load SVD model do thiếu module: {e}")
+            svd_model = None
+        except Exception as e:
+            logger.warning(f"Không thể load SVD model: {e}")
+            svd_model = None
     else:
         logger.warning("SVD model không tìm thấy")
 

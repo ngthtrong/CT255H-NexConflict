@@ -3,9 +3,15 @@ package com.example.backend.service;
 import com.example.backend.entity.Movie;
 import com.example.backend.repository.MovieRepository;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 @Service
@@ -59,5 +65,90 @@ public class TMDBService {
                 movieRepository.save(movie);
             }
         }
+    }
+
+    public Map<String, Object> syncMissingPosters(int fetchBatchSize, int saveBatchSize, Integer maxMovies) {
+        Instant startedAt = Instant.now();
+
+        long totalCandidates = movieRepository.countByTmdbIdIsNotNullAndPosterUrlIsNull();
+        long attempted = 0;
+        long updated = 0;
+        long failed = 0;
+        long skippedNoPoster = 0;
+        boolean hasTmdbApiKey = apiKey != null && !apiKey.isBlank();
+
+        if (!hasTmdbApiKey) {
+            Map<String, Object> stats = new LinkedHashMap<>();
+            stats.put("startedAt", startedAt.toString());
+            stats.put("durationMs", 0);
+            stats.put("totalCandidates", totalCandidates);
+            stats.put("attempted", 0);
+            stats.put("updated", 0);
+            stats.put("failed", 0);
+            stats.put("skippedNoPoster", 0);
+            stats.put("skippedNoApiKey", totalCandidates);
+            stats.put("remaining", totalCandidates);
+            stats.put("tmdbApiKeyConfigured", false);
+            return stats;
+        }
+
+        List<Movie> moviesToSave = new ArrayList<>();
+
+        while (true) {
+            if (maxMovies != null && attempted >= maxMovies) {
+                break;
+            }
+
+            Page<Movie> page = movieRepository.findByTmdbIdIsNotNullAndPosterUrlIsNull(PageRequest.of(0, fetchBatchSize));
+            if (page.isEmpty()) {
+                break;
+            }
+
+            for (Movie movie : page.getContent()) {
+                if (maxMovies != null && attempted >= maxMovies) {
+                    break;
+                }
+
+                attempted++;
+                try {
+                    String posterUrl = getPosterUrl(movie.getTmdbId());
+                    if (posterUrl != null && !posterUrl.isBlank()) {
+                        movie.setPosterUrl(posterUrl);
+                        moviesToSave.add(movie);
+                        updated++;
+
+                        if (moviesToSave.size() >= saveBatchSize) {
+                            movieRepository.saveAll(moviesToSave);
+                            moviesToSave.clear();
+                        }
+                    } else {
+                        skippedNoPoster++;
+                    }
+                } catch (Exception ex) {
+                    failed++;
+                    System.err.println("Failed to sync poster for movieId=" + movie.getId() + ": " + ex.getMessage());
+                }
+            }
+        }
+
+        if (!moviesToSave.isEmpty()) {
+            movieRepository.saveAll(moviesToSave);
+        }
+
+        long durationMs = java.time.Duration.between(startedAt, Instant.now()).toMillis();
+
+        Map<String, Object> stats = new LinkedHashMap<>();
+        stats.put("startedAt", startedAt.toString());
+        stats.put("durationMs", durationMs);
+        stats.put("totalCandidates", totalCandidates);
+        stats.put("attempted", attempted);
+        stats.put("updated", updated);
+        stats.put("failed", failed);
+        stats.put("skippedNoPoster", skippedNoPoster);
+        stats.put("skippedNoApiKey", 0);
+        stats.put("remaining", movieRepository.countByTmdbIdIsNotNullAndPosterUrlIsNull());
+        stats.put("tmdbApiKeyConfigured", true);
+
+        return stats;
     }
 }

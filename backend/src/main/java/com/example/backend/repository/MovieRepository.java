@@ -12,5 +12,7 @@ import java.util.List;
 public interface MovieRepository extends JpaRepository<Movie, Long> {
     Page<Movie> findByTitleContainingIgnoreCase(String title, Pageable pageable);
     List<Movie> findByGenresContainingIgnoreCase(String genre);
+    Page<Movie> findByTmdbIdIsNotNullAndPosterUrlIsNull(Pageable pageable);
+    long countByTmdbIdIsNotNullAndPosterUrlIsNull();
 }
 

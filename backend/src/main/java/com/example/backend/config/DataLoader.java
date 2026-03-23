@@ -2,9 +2,11 @@ package com.example.backend.config;
 
 import com.example.backend.entity.Movie;
 import com.example.backend.repository.MovieRepository;
+import com.example.backend.service.TMDBService;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVParser;
 import org.apache.commons.csv.CSVRecord;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.stereotype.Component;
 
@@ -21,15 +23,48 @@ import java.util.*;
 public class DataLoader implements CommandLineRunner {
 
     private final MovieRepository movieRepository;
+    private final TMDBService tmdbService;
 
-    public DataLoader(MovieRepository movieRepository) {
+    @Value("${poster.sync.on-startup:true}")
+    private boolean syncPostersOnStartup;
+
+    @Value("${poster.sync.fetch-batch-size:100}")
+    private int posterSyncFetchBatchSize;
+
+    @Value("${poster.sync.save-batch-size:100}")
+    private int posterSyncSaveBatchSize;
+
+    @Value("${poster.sync.max-movies:300}")
+    private int posterSyncMaxMovies;
+
+    public DataLoader(MovieRepository movieRepository, TMDBService tmdbService) {
         this.movieRepository = movieRepository;
+        this.tmdbService = tmdbService;
     }
 
     @Override
     public void run(String... args) throws Exception {
         loadMovies();
         loadMovieLinks();
+        syncMissingPosters();
+    }
+
+    private void syncMissingPosters() {
+        if (!syncPostersOnStartup) {
+            System.out.println("DataLoader: Startup poster sync disabled.");
+            return;
+        }
+
+        Integer maxMovies = posterSyncMaxMovies > 0 ? posterSyncMaxMovies : null;
+        System.out.println("DataLoader: Starting poster sync (fetchBatchSize=" + posterSyncFetchBatchSize
+                + ", saveBatchSize=" + posterSyncSaveBatchSize + ", maxMovies=" + maxMovies + ")");
+
+        Map<String, Object> stats = tmdbService.syncMissingPosters(
+                posterSyncFetchBatchSize,
+                posterSyncSaveBatchSize,
+                maxMovies
+        );
+        System.out.println("DataLoader: Poster sync completed: " + stats);
     }
 
     private void loadMovies() {
