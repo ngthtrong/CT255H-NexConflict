@@ -1,1 +1,0 @@
-# NexConflict source package
