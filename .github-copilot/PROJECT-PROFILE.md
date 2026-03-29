@@ -85,15 +85,49 @@ health_check_url: "http://localhost:8000/docs"
 
 ## Fragile Zones Summary
 
-| Zone | File | Risk | Lý do |
-|------|------|------|-------|
-| <!-- tên zone --> | <!-- đường dẫn file --> | 🔴 HIGH / 🟡 MEDIUM / 🟢 LOW | <!-- giải thích --> |
+> **Tổng số**: 17 zones (6 HIGH, 6 MEDIUM, 5 LOW)  
+> **Chi tiết đầy đủ**: [04-fragile-zones.md](workspace/analysis/04-fragile-zones.md)
+
+| Zone ID | File/Area | Risk | Lý do | Effort |
+|---------|-----------|------|-------|--------|
+| **FZ-H01** | backend/security/* (duplicate classes) | 🔴 HIGH | Duplicate JWT security classes causing confusion | 2h |
+| **FZ-H02** | backend/application.properties (line 24) | 🔴 HIGH | Hardcoded JWT secret in properties file | 1h |
+| **FZ-H03** | backend/application.properties (line 40) | 🔴 HIGH | Hardcoded TMDB API key exposed | 30m |
+| **FZ-H04** | backend/application.properties | 🔴 HIGH | No database connection pooling configured | 1h |
+| **FZ-H05** | backend/RecommendationService.java | 🔴 HIGH | AI service single point of failure (no circuit breaker) | 4h |
+| **FZ-H06** | backend/OnboardingController.java | 🔴 HIGH | Missing rating validation (accepts out-of-range values) | 1h |
+| **FZ-M01** | ai-service/main.py (lines 100-350) | 🟡 MEDIUM | God function with 250+ lines of logic | 3h |
+| **FZ-M02** | ai-service/train.py (single file) | 🟡 MEDIUM | No modularization of training logic | 6h |
+| **FZ-M03** | backend/ (no migrations folder) | 🟡 MEDIUM | No database migration tooling (Flyway/Liquibase) | 4h |
+| **FZ-M04** | backend/GenreRepository.java | 🟡 MEDIUM | N+1 query pattern on genre tags | 2h |
+| **FZ-M05** | backend/RecommendationService.java | 🟡 MEDIUM | No RestTemplate timeout configuration | 30m |
+| **FZ-M06** | frontend/app/onboarding/page.tsx | 🟡 MEDIUM | Onboarding ratings not integrated with backend | 2h |
+
+**Total Remediation Effort**: 27 hours (HIGH priority only: 9.5h)
 
 ## Tech Debt Register
 
-| ID | Mô tả | Ảnh hưởng | Priority |
-|----|-------|-----------|----------|
-| TD-001 | <!-- mô tả tech debt --> | <!-- ảnh hưởng đến vùng nào --> | P1 / P2 / P3 |
+> **Chi tiết đầy đủ**: [00-SUMMARY.md](workspace/analysis/00-SUMMARY.md)
+
+| ID | Mô tả | Ảnh hưởng | Priority | Effort |
+|----|-------|-----------|----------|--------|
+| **TD-001** | Hardcoded JWT secret & TMDB API key | Security vulnerability, potential breach | P1 | 1.5h |
+| **TD-002** | Test coverage only 2% (1 smoke test) | High regression risk on changes | P1 | 26h |
+| **TD-003** | Duplicate JWT security classes | Code maintenance confusion | P1 | 2h |
+| **TD-004** | No database migrations (Flyway/Liquibase) | Schema changes require manual SQL | P2 | 4h |
+| **TD-005** | AI service has no circuit breaker | Backend fails when AI service is down | P2 | 4h |
+| **TD-006** | No API documentation (Swagger/OpenAPI) | Developer onboarding difficulty | P2 | 3h |
+| **TD-007** | Missing input validation (ratings, genres) | Data integrity issues | P2 | 2h |
+| **TD-008** | No connection pooling configured | Performance degradation under load | P2 | 1h |
+| **TD-009** | God function in AI service (250+ lines) | Hard to test and maintain | P3 | 3h |
+| **TD-010** | No logging framework (only System.out) | Production debugging difficulty | P3 | 2h |
+| **TD-011** | Frontend has no error boundaries | Poor UX on component errors | P3 | 2h |
+| **TD-012** | No caching for recommendations | Repeated AI calls for same request | P3 | 4h |
+
+**Total Tech Debt**: 54.5 hours remediation effort  
+**P1 Critical**: 29.5 hours  
+**P2 Important**: 14 hours  
+**P3 Nice-to-have**: 11 hours
 
 ## External Dependencies
 
