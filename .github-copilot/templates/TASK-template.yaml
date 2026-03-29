@@ -1,0 +1,28 @@
+id: TASK-00000
+type: unit-test          # unit-test | implementation | e2e-test
+status: pending          # pending | in-progress | done | merged | blocked
+priority: P2             # P1 | P2 | P3
+feature: ""              # Tên tính năng ngắn gọn
+description: ""          # Mô tả chi tiết task này làm gì
+req_ref: "REQ-00000"     # REF đến spec đã phê duyệt
+
+# Chỉ điền nếu mã task có phụ thuộc
+depends_on: []           # ví dụ: [TASK-00001]
+
+# Điền bởi PM khi plan sprint
+branch: ""               # ví dụ: feature/TASK-00002-auth-login
+acceptance_criteria:
+  - given: ""
+    when: ""
+    then: ""
+
+# Điền bởi Developer sau khi impl
+coverage_pct: 0
+tests_passing: 0
+n1_scan: "not-run"       # clean | issues-fixed | issues-deferred
+tech_debt_notes: ""
+
+# Điền bởi Tech Lead sau review
+review_status: "pending" # pending | approved | changes-requested
+reviewed_by: "Tech Lead Agent"
+review_date: ""

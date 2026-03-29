@@ -1,0 +1,22 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "type": "command",
+        "windows": "pwsh -NoProfile -ExecutionPolicy Bypass -File .github/hooks/scripts/session-start.ps1",
+        "linux": "pwsh -NoProfile -File .github/hooks/scripts/session-start.ps1",
+        "osx": "pwsh -NoProfile -File .github/hooks/scripts/session-start.ps1",
+        "timeout": 10
+      }
+    ],
+    "PreToolUse": [
+      {
+        "type": "command",
+        "windows": "pwsh -NoProfile -ExecutionPolicy Bypass -File .github/hooks/scripts/pre-tool-guard.ps1",
+        "linux": "pwsh -NoProfile -File .github/hooks/scripts/pre-tool-guard.ps1",
+        "osx": "pwsh -NoProfile -File .github/hooks/scripts/pre-tool-guard.ps1",
+        "timeout": 10
+      }
+    ]
+  }
+}
