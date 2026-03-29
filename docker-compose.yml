@@ -1,18 +1,73 @@
-version: '3.8'
-
 services:
-  postgres-db:
+  # ==================== DATABASE ====================
+  postgres:
     image: postgres:16-alpine
-    container_name: nexconflict_db
-    restart: always
+    container_name: nexconflict_postgres
+    restart: unless-stopped
     environment:
-      POSTGRES_USER: root
-      POSTGRES_PASSWORD: rootpassword
-      POSTGRES_DB: nexconflict_db
+      POSTGRES_USER: ${POSTGRES_USER:-nexconflict}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-nexconflict123}
+      POSTGRES_DB: ${POSTGRES_DB:-nexconflict_db}
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-nexconflict} -d ${POSTGRES_DB:-nexconflict_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ==================== BACKEND (Spring Boot) ====================
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: nexconflict_backend
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-nexconflict_db}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-nexconflict}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-nexconflict123}
+      SPRING_JPA_DATABASE_PLATFORM: org.hibernate.dialect.PostgreSQLDialect
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
+      JWT_SECRET: ${JWT_SECRET:-your-super-secret-jwt-key-change-in-production}
+      TMDB_API_KEY: ${TMDB_API_KEY:-}
+      AI_SERVICE_URL: http://ai-service:8000
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./data:/app/data:ro
+
+  # ==================== FRONTEND (Next.js) ====================
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: nexconflict_frontend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8080
+    depends_on:
+      - backend
+
+  # ==================== AI SERVICE (FastAPI) ====================
+  ai-service:
+    build:
+      context: ./ai-service
+      dockerfile: Dockerfile
+    container_name: nexconflict_ai
+    restart: unless-stopped
+    ports:
+      - "8001:8000"
+    volumes:
+      - ./data:/app/data:ro
+      - ./ai-service/models:/app/models:ro
 
 volumes:
   postgres_data:

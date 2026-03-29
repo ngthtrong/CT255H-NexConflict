@@ -69,12 +69,9 @@ public class SecurityConfig {
                         .requestMatchers("/api/ratings/movie/**").permitAll()
                         .requestMatchers("/api/onboarding/genres").permitAll()
                         .requestMatchers("/api/onboarding/popular-movies").permitAll()
-                        .requestMatchers("/h2-console/**").permitAll()
                         .anyRequest().authenticated()
                 );
 
-        // Allow H2 console frames
-        http.headers(headers -> headers.frameOptions(frame -> frame.sameOrigin()));
         http.addFilterBefore(jwtAuthenticationFilter(), UsernamePasswordAuthenticationFilter.class);
 
         return http.build();

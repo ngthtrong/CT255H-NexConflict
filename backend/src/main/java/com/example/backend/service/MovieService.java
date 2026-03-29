@@ -3,7 +3,9 @@ package com.example.backend.service;
 import com.example.backend.entity.Movie;
 import com.example.backend.repository.MovieRepository;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -18,10 +20,17 @@ public class MovieService {
     }
 
     public Page<Movie> getAllMovies(String title, Pageable pageable) {
+        // Create a new pageable with ID descending sort to show newest movies first
+        Pageable sortedPageable = PageRequest.of(
+                pageable.getPageNumber(),
+                pageable.getPageSize(),
+                Sort.by(Sort.Direction.DESC, "id")
+        );
+        
         if (title != null && !title.isEmpty()) {
-            return movieRepository.findByTitleContainingIgnoreCase(title, pageable);
+            return movieRepository.findByTitleContainingIgnoreCase(title, sortedPageable);
         }
-        return movieRepository.findAll(pageable);
+        return movieRepository.findAll(sortedPageable);
     }
 
     public Optional<Movie> getMovieById(Long id) {
@@ -29,8 +38,8 @@ public class MovieService {
     }
 
     public List<Movie> getPopularMovies() {
-        // Placeholder: Return first 20 movies
-        return movieRepository.findAll(Pageable.ofSize(20)).getContent();
+        // Return most popular movies (sorted by rating count)
+        return movieRepository.findMostPopularMovies(PageRequest.of(0, 20));
     }
 }
 

@@ -76,8 +76,8 @@ public class RecommendationService {
         } catch (Exception e) {
             System.err.println("AI Service unavailable: " + e.getMessage());
         }
-        // Fallback: Return popular movies (first 10)
-        return movieRepository.findAll().stream().limit(10).collect(Collectors.toList());
+        // Fallback: Return newest popular movies (first 10, sorted by ID desc for newest)
+        return movieRepository.findAllByOrderByIdDesc().stream().limit(10).collect(Collectors.toList());
     }
 
     public List<Movie> getSimilarMovies(Long movieId) {

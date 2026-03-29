@@ -227,10 +227,10 @@ export default function OnboardingPage() {
               Step 2: Rate some movies you've watched
             </h2>
             <p className="text-gray-400 mb-6">
-              Rate at least 5 movies to help us understand your taste
+              Rate at least 5 movies from these popular titles to help us understand your taste
             </p>
 
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 mb-6 max-h-[500px] overflow-y-auto">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 mb-6 max-h-[600px] overflow-y-auto">
               {popularMovies.map((movie) => (
                 <div
                   key={movie.id}

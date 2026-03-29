@@ -68,8 +68,8 @@ public class RecommendationController {
         List<UserPreference> prefs = userPreferenceRepository.findByUserId(user.getId());
 
         if (prefs.isEmpty()) {
-            // No preferences, return empty or popular movies
-            return movieRepository.findAll().stream().limit(10).collect(Collectors.toList());
+            // No preferences, return newest movies
+            return movieRepository.findAllByOrderByIdDesc().stream().limit(10).collect(Collectors.toList());
         }
 
         List<String> favoriteGenres = prefs.stream()
@@ -77,7 +77,8 @@ public class RecommendationController {
                 .collect(Collectors.toList());
 
         // Find movies that match any of the user's favorite genres
-        List<Movie> allMovies = movieRepository.findAll();
+        // Sort by ID descending to get newest movies first
+        List<Movie> allMovies = movieRepository.findAllByOrderByIdDesc();
         List<Movie> matchingMovies = new ArrayList<>();
 
         for (Movie movie : allMovies) {
@@ -115,12 +116,13 @@ public class RecommendationController {
 
     /**
      * Get top trending/popular movies (for guests and non-onboarded users)
+     * Returns newest movies first (higher movie ID = newer movie in MovieLens dataset)
      * No authentication required
      */
     @GetMapping("/trending")
     public List<Movie> getTrendingMovies(@RequestParam(defaultValue = "20") int limit) {
-        // Return first N movies (MovieLens sorts by popularity)
-        return movieRepository.findAll().stream()
+        // Return newest movies first (sorted by ID descending)
+        return movieRepository.findAllByOrderByIdDesc().stream()
                 .limit(limit)
                 .collect(Collectors.toList());
     }

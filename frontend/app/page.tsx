@@ -119,7 +119,7 @@ export default function Home() {
           {!showPersonalized && (
             <div className="mt-12">
               <h2 className="text-2xl font-bold text-white mb-6 flex items-center gap-2">
-                <span className="text-red-500">🔥</span> Top Trending
+                <span className="text-red-500">🎬</span> New Releases
               </h2>
               {trendingMovies.length > 0 ? (
                 <div className="grid grid-cols-2 gap-x-4 gap-y-8 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">

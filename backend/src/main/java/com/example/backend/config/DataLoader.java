@@ -1,6 +1,8 @@
 package com.example.backend.config;
 
 import com.example.backend.entity.Movie;
+import com.example.backend.entity.MoviePopularity;
+import com.example.backend.repository.MoviePopularityRepository;
 import com.example.backend.repository.MovieRepository;
 import com.example.backend.service.TMDBService;
 import org.apache.commons.csv.CSVFormat;
@@ -23,6 +25,7 @@ import java.util.*;
 public class DataLoader implements CommandLineRunner {
 
     private final MovieRepository movieRepository;
+    private final MoviePopularityRepository moviePopularityRepository;
     private final TMDBService tmdbService;
 
     @Value("${poster.sync.on-startup:true}")
@@ -37,8 +40,9 @@ public class DataLoader implements CommandLineRunner {
     @Value("${poster.sync.max-movies:300}")
     private int posterSyncMaxMovies;
 
-    public DataLoader(MovieRepository movieRepository, TMDBService tmdbService) {
+    public DataLoader(MovieRepository movieRepository, MoviePopularityRepository moviePopularityRepository, TMDBService tmdbService) {
         this.movieRepository = movieRepository;
+        this.moviePopularityRepository = moviePopularityRepository;
         this.tmdbService = tmdbService;
     }
 
@@ -46,6 +50,7 @@ public class DataLoader implements CommandLineRunner {
     public void run(String... args) throws Exception {
         loadMovies();
         loadMovieLinks();
+        loadMoviePopularity();
         syncMissingPosters();
     }
 
@@ -90,11 +95,6 @@ public class DataLoader implements CommandLineRunner {
                         movie.setGenres(csvRecord.get("genres"));
                         movies.add(movie);
                         count++;
-
-                        // Limit to 1000 movies for quick dev startup
-                        if (count >= 1000) {
-                            break;
-                        }
 
                         // Save in batches
                         if (movies.size() >= 500) {
@@ -158,7 +158,8 @@ public class DataLoader implements CommandLineRunner {
                         String imdbIdStr = csvRecord.get("imdbId");
 
                         if (tmdbIdStr != null && !tmdbIdStr.isEmpty()) {
-                            movie.setTmdbId(Long.parseLong(tmdbIdStr));
+                            // Parse as double first to handle decimal format (e.g., "19457.0")
+                            movie.setTmdbId(Double.valueOf(tmdbIdStr).longValue());
                         }
                         if (imdbIdStr != null && !imdbIdStr.isEmpty()) {
                             movie.setImdbId(imdbIdStr);
@@ -182,6 +183,73 @@ public class DataLoader implements CommandLineRunner {
             }
 
             System.out.println("DataLoader: Movie links loaded successfully.");
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private void loadMoviePopularity() {
+        if (moviePopularityRepository.count() > 0) {
+            System.out.println("DataLoader: Movie popularity already loaded (" + moviePopularityRepository.count() + " records).");
+            return;
+        }
+
+        Path path = findFile("ratings.csv");
+        if (path == null) {
+            System.out.println("DataLoader: ratings.csv not found, skipping popularity loading");
+            return;
+        }
+
+        System.out.println("DataLoader: Calculating movie popularity from " + path.toAbsolutePath());
+        System.out.println("DataLoader: This may take a few minutes for large files...");
+
+        try (Reader reader = new FileReader(path.toFile(), StandardCharsets.UTF_8);
+             CSVParser csvParser = new CSVParser(reader, CSVFormat.DEFAULT.withFirstRecordAsHeader().withIgnoreHeaderCase().withTrim())) {
+
+            // Count ratings and sum for each movie
+            Map<Long, Long> ratingCounts = new HashMap<>();
+            Map<Long, Double> ratingSums = new HashMap<>();
+
+            int recordCount = 0;
+            for (CSVRecord csvRecord : csvParser) {
+                try {
+                    Long movieId = Long.parseLong(csvRecord.get("movieId"));
+                    Double rating = Double.parseDouble(csvRecord.get("rating"));
+
+                    ratingCounts.merge(movieId, 1L, Long::sum);
+                    ratingSums.merge(movieId, rating, Double::sum);
+
+                    recordCount++;
+                    if (recordCount % 1000000 == 0) {
+                        System.out.println("DataLoader: Processed " + recordCount + " ratings...");
+                    }
+                } catch (NumberFormatException e) {
+                    // Skip invalid records
+                }
+            }
+
+            System.out.println("DataLoader: Processed " + recordCount + " total ratings for " + ratingCounts.size() + " movies");
+
+            // Save popularity data in batches
+            List<MoviePopularity> popularityList = new ArrayList<>();
+            for (Map.Entry<Long, Long> entry : ratingCounts.entrySet()) {
+                Long movieId = entry.getKey();
+                Long count = entry.getValue();
+                Double avgRating = ratingSums.get(movieId) / count;
+
+                popularityList.add(new MoviePopularity(movieId, count, avgRating));
+
+                if (popularityList.size() >= 500) {
+                    moviePopularityRepository.saveAll(popularityList);
+                    popularityList.clear();
+                }
+            }
+
+            if (!popularityList.isEmpty()) {
+                moviePopularityRepository.saveAll(popularityList);
+            }
+
+            System.out.println("DataLoader: Movie popularity loaded successfully (" + moviePopularityRepository.count() + " records).");
         } catch (IOException e) {
             e.printStackTrace();
         }

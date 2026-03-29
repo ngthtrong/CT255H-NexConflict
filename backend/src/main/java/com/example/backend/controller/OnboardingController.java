@@ -2,6 +2,7 @@ package com.example.backend.controller;
 
 import com.example.backend.entity.*;
 import com.example.backend.repository.*;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -19,6 +20,7 @@ public class OnboardingController {
     private final UserPreferenceRepository userPreferenceRepository;
     private final UserOnboardingRatingRepository userOnboardingRatingRepository;
     private final RatingRepository ratingRepository;
+    private final MoviePopularityRepository moviePopularityRepository;
 
     // All genres from MovieLens dataset
     private static final List<String> ALL_GENRES = Arrays.asList(
@@ -33,13 +35,15 @@ public class OnboardingController {
             MovieRepository movieRepository,
             UserPreferenceRepository userPreferenceRepository,
             UserOnboardingRatingRepository userOnboardingRatingRepository,
-            RatingRepository ratingRepository
+            RatingRepository ratingRepository,
+            MoviePopularityRepository moviePopularityRepository
     ) {
         this.userRepository = userRepository;
         this.movieRepository = movieRepository;
         this.userPreferenceRepository = userPreferenceRepository;
         this.userOnboardingRatingRepository = userOnboardingRatingRepository;
         this.ratingRepository = ratingRepository;
+        this.moviePopularityRepository = moviePopularityRepository;
     }
 
     /**
@@ -63,18 +67,32 @@ public class OnboardingController {
 
     /**
      * Step 2: Get popular movies for user to rate
-     * Returns top 50 popular movies (movies with most ratings)
+     * Returns top N movies sorted by number of ratings (most popular first)
+     * This ensures users see well-known movies they're likely to have watched
      */
     @GetMapping("/popular-movies")
     public ResponseEntity<?> getPopularMovies(@RequestParam(defaultValue = "50") int limit) {
-        // Get movies - ideally sorted by popularity (number of ratings)
-        // For now, just get first N movies which are usually popular ones from MovieLens
-        List<Movie> popularMovies = movieRepository.findAll()
-                .stream()
-                .limit(limit)
+        // Get top movie IDs from pre-calculated popularity data (from ratings.csv)
+        List<Long> topMovieIds = moviePopularityRepository.findTopMovieIds(PageRequest.of(0, limit));
+        
+        if (topMovieIds.isEmpty()) {
+            // Fallback to newest movies if popularity data not available
+            return ResponseEntity.ok(movieRepository.findAllByOrderByIdDesc().stream()
+                    .limit(limit)
+                    .collect(Collectors.toList()));
+        }
+        
+        // Fetch movie details and maintain popularity order
+        List<Movie> movies = movieRepository.findAllById(topMovieIds);
+        Map<Long, Movie> movieMap = movies.stream()
+                .collect(Collectors.toMap(Movie::getId, m -> m));
+        
+        List<Movie> sortedMovies = topMovieIds.stream()
+                .map(movieMap::get)
+                .filter(Objects::nonNull)
                 .collect(Collectors.toList());
 
-        return ResponseEntity.ok(popularMovies);
+        return ResponseEntity.ok(sortedMovies);
     }
 
     /**
