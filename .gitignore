@@ -17,6 +17,7 @@ artifacts/*.joblib
 # Environment
 .env
 .venv/
+.venv310/
 venv/
 env/
 
@@ -35,3 +36,21 @@ Thumbs.db
 
 # Plots giữ lại (không ignore)
 !artifacts/plots/.gitkeep
+
+# Next
+frontend/.next_temp_build/
+
+# Logs
+*.log
+*.out.log
+*.err.log
+
+# AI model artifacts (local training outputs)
+ai-service/models/
+
+# Local extracted datasets and archives
+data/ml-latest-small/
+data/*.zip
+
+# Java build outputs
+backend/target/
