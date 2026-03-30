@@ -473,6 +473,7 @@ def get_recommendations_based_on_movies(movie_ids: list[int], limit: int = 10):
         return [int(x) for x in movies_df['movieId'].head(limit).values]
 
 
+# --- Pydantic models for personalized recommendations ---
 class RatedMovie(BaseModel):
     movieId: int
     rating: float
@@ -498,7 +499,7 @@ def get_personalized_recommendations(request: PersonalizedRequest):
         preferred_genres = set(g.lower() for g in request.preferredGenres)
         rated_movie_ids = set(rm.movieId for rm in request.ratedMovies) if request.ratedMovies else set()
         
-        logger.info(f"[Personalized] Genres: {preferred_genres}, Rated: {rated_movie_ids}")
+        logger.info(f"[Personalized] Genres: {preferred_genres}, Rated movies: {len(rated_movie_ids)}")
         
         # Strategy 1: If user has rated movies with high ratings, find similar movies
         if request.ratedMovies and cosine_sim_matrix is not None:
