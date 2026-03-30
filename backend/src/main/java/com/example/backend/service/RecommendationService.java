@@ -1,18 +1,14 @@
 package com.example.backend.service;
 
-import com.example.backend.entity.Movie;
-import com.example.backend.entity.User;
-import com.example.backend.entity.Watchlist;
-import com.example.backend.repository.MovieRepository;
-import com.example.backend.repository.WatchlistRepository;
+import com.example.backend.entity.*;
+import com.example.backend.repository.*;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
@@ -20,12 +16,21 @@ public class RecommendationService {
 
     private final MovieRepository movieRepository;
     private final WatchlistRepository watchlistRepository;
+    private final UserPreferenceRepository userPreferenceRepository;
+    private final RatingRepository ratingRepository;
     private final RestTemplate restTemplate = new RestTemplate();
     private final String AI_SERVICE_URL = "http://localhost:8000";
 
-    public RecommendationService(MovieRepository movieRepository, WatchlistRepository watchlistRepository) {
+    public RecommendationService(
+            MovieRepository movieRepository, 
+            WatchlistRepository watchlistRepository,
+            UserPreferenceRepository userPreferenceRepository,
+            RatingRepository ratingRepository
+    ) {
         this.movieRepository = movieRepository;
         this.watchlistRepository = watchlistRepository;
+        this.userPreferenceRepository = userPreferenceRepository;
+        this.ratingRepository = ratingRepository;
     }
 
     public List<Movie> getRecommendationsForUser(User user) {
@@ -41,7 +46,7 @@ public class RecommendationService {
             System.out.println("Getting recommendations based on watchlist: " + watchlistMovieIds);
 
             try {
-                // Call new AI endpoint with watchlist movie IDs
+                // Call AI endpoint with watchlist movie IDs
                 HttpHeaders headers = new HttpHeaders();
                 headers.setContentType(MediaType.APPLICATION_JSON);
                 HttpEntity<List<Long>> request = new HttpEntity<>(watchlistMovieIds, headers);
@@ -64,19 +69,67 @@ public class RecommendationService {
             }
         }
 
-        // Fallback: Use SVD-based or popular movies
+        // No watchlist - Use personalized recommendations based on user preferences and ratings
+        return getPersonalizedRecommendations(user);
+    }
+
+    /**
+     * Get personalized recommendations based on user's preferred genres and rated movies.
+     * This is used for new users who are not in the pre-trained collaborative filtering models.
+     */
+    private List<Movie> getPersonalizedRecommendations(User user) {
         try {
-            List<?> movieIds = restTemplate.getForObject(AI_SERVICE_URL + "/recommendations/" + user.getId(), List.class);
+            // Get user's preferred genres from onboarding
+            List<UserPreference> preferences = userPreferenceRepository.findByUserId(user.getId());
+            List<String> preferredGenres = preferences.stream()
+                    .map(UserPreference::getGenreName)
+                    .collect(Collectors.toList());
+
+            // Get user's rated movies
+            List<Rating> ratings = ratingRepository.findByUser(user);
+            List<Map<String, Object>> ratedMovies = ratings.stream()
+                    .map(r -> {
+                        Map<String, Object> map = new HashMap<>();
+                        map.put("movieId", r.getMovie().getId());
+                        map.put("rating", r.getRating());
+                        return map;
+                    })
+                    .collect(Collectors.toList());
+
+            System.out.println("Getting personalized recommendations for user " + user.getId());
+            System.out.println("Preferred genres: " + preferredGenres);
+            System.out.println("Rated movies count: " + ratedMovies.size());
+
+            // Build request body
+            Map<String, Object> requestBody = new HashMap<>();
+            requestBody.put("preferredGenres", preferredGenres);
+            requestBody.put("ratedMovies", ratedMovies);
+            requestBody.put("limit", 10);
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            HttpEntity<Map<String, Object>> request = new HttpEntity<>(requestBody, headers);
+
+            List<?> movieIds = restTemplate.postForObject(
+                    AI_SERVICE_URL + "/recommendations/personalized",
+                    request,
+                    List.class
+            );
+
             if (movieIds != null && !movieIds.isEmpty()) {
-                 List<Long> ids = movieIds.stream()
-                         .map(id -> Long.valueOf(id.toString()))
-                         .collect(Collectors.toList());
-                 return movieRepository.findAllById(ids);
+                List<Long> ids = movieIds.stream()
+                        .map(id -> Long.valueOf(id.toString()))
+                        .collect(Collectors.toList());
+                System.out.println("Personalized recommendations: " + ids);
+                return movieRepository.findAllById(ids);
             }
         } catch (Exception e) {
-            System.err.println("AI Service unavailable: " + e.getMessage());
+            System.err.println("Personalized recommendations failed: " + e.getMessage());
+            e.printStackTrace();
         }
-        // Fallback: Return newest popular movies (first 10, sorted by ID desc for newest)
+
+        // Final fallback: Return newest popular movies
+        System.out.println("Falling back to newest movies");
         return movieRepository.findAllByOrderByIdDesc().stream().limit(10).collect(Collectors.toList());
     }
 
