@@ -126,5 +126,34 @@ public class RecommendationController {
                 .limit(limit)
                 .collect(Collectors.toList());
     }
+
+    /**
+     * Debug endpoint to check user's personalization data
+     */
+    @GetMapping("/debug-user-data")
+    public java.util.Map<String, Object> debugUserData() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        String email = auth.getName();
+        User user = userRepository.findByEmail(email).orElseThrow(() -> new RuntimeException("User not found"));
+
+        List<UserPreference> prefs = userPreferenceRepository.findByUserId(user.getId());
+        List<Rating> ratings = ratingRepository.findByUser(user);
+
+        java.util.Map<String, Object> debug = new java.util.HashMap<>();
+        debug.put("userId", user.getId());
+        debug.put("email", user.getEmail());
+        debug.put("onboardingCompleted", user.getOnboardingCompleted());
+        debug.put("preferredGenres", prefs.stream().map(UserPreference::getGenreName).collect(Collectors.toList()));
+        debug.put("ratedMoviesCount", ratings.size());
+        debug.put("ratedMovies", ratings.stream()
+            .map(r -> java.util.Map.of(
+                "movieId", r.getMovie().getId(),
+                "title", r.getMovie().getTitle(),
+                "rating", r.getRating()
+            ))
+            .collect(Collectors.toList()));
+
+        return debug;
+    }
 }
 

@@ -482,6 +482,7 @@ class PersonalizedRequest(BaseModel):
     preferredGenres: List[str]
     ratedMovies: Optional[List[RatedMovie]] = []
     limit: int = 10
+    userId: Optional[int] = None  # Added for user-specific randomization
 
 
 @app.post("/recommendations/personalized")
@@ -499,7 +500,16 @@ def get_personalized_recommendations(request: PersonalizedRequest):
         preferred_genres = set(g.lower() for g in request.preferredGenres)
         rated_movie_ids = set(rm.movieId for rm in request.ratedMovies) if request.ratedMovies else set()
         
-        logger.info(f"[Personalized] Genres: {preferred_genres}, Rated movies: {len(rated_movie_ids)}")
+        logger.info(f"[Personalized] User: {request.userId}, Genres: {preferred_genres}, Rated movies: {len(rated_movie_ids)}")
+        
+        # Seed random with userId for consistent but user-specific results
+        import random
+        if request.userId:
+            random.seed(request.userId)
+        else:
+            # Fallback: use hash of preferences for some variation
+            seed_value = hash(frozenset(preferred_genres)) + len(rated_movie_ids)
+            random.seed(seed_value)
         
         # Strategy 1: If user has rated movies with high ratings, find similar movies
         if request.ratedMovies and cosine_sim_matrix is not None:
@@ -566,8 +576,8 @@ def get_personalized_recommendations(request: PersonalizedRequest):
             
             if genre_scores:
                 # Sort by match count, then shuffle within same score for variety
-                import random
-                random.shuffle(genre_scores)  # Add randomness
+                # Random is already seeded above with userId
+                random.shuffle(genre_scores)
                 genre_scores.sort(key=lambda x: x[1], reverse=True)
                 
                 result = [movie_id for movie_id, score in genre_scores[:request.limit]]
@@ -577,7 +587,7 @@ def get_personalized_recommendations(request: PersonalizedRequest):
         # Fallback: Return diverse movies
         logger.info("[Personalized-Fallback] Using random diverse movies")
         all_movie_ids = [int(x) for x in movies_df['movieId'].values]
-        import random
+        # Random is already seeded above with userId
         random.shuffle(all_movie_ids)
         return all_movie_ids[:request.limit]
     

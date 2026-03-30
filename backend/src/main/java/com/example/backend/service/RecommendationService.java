@@ -2,6 +2,7 @@ package com.example.backend.service;
 
 import com.example.backend.entity.*;
 import com.example.backend.repository.*;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -19,7 +20,9 @@ public class RecommendationService {
     private final UserPreferenceRepository userPreferenceRepository;
     private final RatingRepository ratingRepository;
     private final RestTemplate restTemplate = new RestTemplate();
-    private final String AI_SERVICE_URL = "http://localhost:8000";
+    
+    @Value("${ai.service.url:http://localhost:8000}")
+    private String AI_SERVICE_URL;
 
     public RecommendationService(
             MovieRepository movieRepository, 
@@ -105,6 +108,7 @@ public class RecommendationService {
             requestBody.put("preferredGenres", preferredGenres);
             requestBody.put("ratedMovies", ratedMovies);
             requestBody.put("limit", 10);
+            requestBody.put("userId", user.getId());  // Add userId for user-specific results
 
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
