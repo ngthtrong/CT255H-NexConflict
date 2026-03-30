@@ -42,12 +42,12 @@ public class RecommendationController {
     }
 
     @GetMapping("/for-you")
-    public List<Movie> getRecommendationsForUser() {
+    public List<Movie> getRecommendationsForUser(@RequestParam(defaultValue = "false") boolean refresh) {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         String email = auth.getName();
         User user = userRepository.findByEmail(email).orElseThrow(() -> new RuntimeException("User not found"));
 
-        return recommendationService.getRecommendationsForUser(user);
+        return recommendationService.getRecommendationsForUser(user, refresh);
     }
 
     @GetMapping("/similar/{movieId}")

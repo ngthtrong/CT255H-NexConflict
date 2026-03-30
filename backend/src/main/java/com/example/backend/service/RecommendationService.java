@@ -37,6 +37,10 @@ public class RecommendationService {
     }
 
     public List<Movie> getRecommendationsForUser(User user) {
+        return getRecommendationsForUser(user, false);
+    }
+
+    public List<Movie> getRecommendationsForUser(User user, boolean refresh) {
         // Get user's watchlist movie IDs
         List<Watchlist> watchlist = watchlistRepository.findByUserOrderByAddedAtDesc(user);
 
@@ -55,7 +59,7 @@ public class RecommendationService {
                 HttpEntity<List<Long>> request = new HttpEntity<>(watchlistMovieIds, headers);
 
                 List<?> movieIds = restTemplate.postForObject(
-                        AI_SERVICE_URL + "/recommendations/based-on-movies?limit=10",
+                        AI_SERVICE_URL + "/recommendations/based-on-movies?limit=10&refresh=" + refresh,
                         request,
                         List.class
                 );
@@ -73,7 +77,7 @@ public class RecommendationService {
         }
 
         // No watchlist - Use personalized recommendations based on user preferences and ratings
-        return getPersonalizedRecommendations(user);
+        return getPersonalizedRecommendations(user, refresh);
     }
 
     /**
@@ -81,6 +85,10 @@ public class RecommendationService {
      * This is used for new users who are not in the pre-trained collaborative filtering models.
      */
     private List<Movie> getPersonalizedRecommendations(User user) {
+        return getPersonalizedRecommendations(user, false);
+    }
+
+    private List<Movie> getPersonalizedRecommendations(User user, boolean refresh) {
         try {
             // Get user's preferred genres from onboarding
             List<UserPreference> preferences = userPreferenceRepository.findByUserId(user.getId());
@@ -99,7 +107,7 @@ public class RecommendationService {
                     })
                     .collect(Collectors.toList());
 
-            System.out.println("Getting personalized recommendations for user " + user.getId());
+            System.out.println("Getting personalized recommendations for user " + user.getId() + " (refresh=" + refresh + ")");
             System.out.println("Preferred genres: " + preferredGenres);
             System.out.println("Rated movies count: " + ratedMovies.size());
 
@@ -109,6 +117,7 @@ public class RecommendationService {
             requestBody.put("ratedMovies", ratedMovies);
             requestBody.put("limit", 10);
             requestBody.put("userId", user.getId());  // Add userId for user-specific results
+            requestBody.put("refresh", refresh);  // Add refresh flag for new recommendations
 
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);

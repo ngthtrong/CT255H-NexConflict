@@ -421,7 +421,7 @@ def get_similar_movies(movie_id: int, limit: int = 5):
         return [movie_id + i for i in range(1, limit + 1)]
 
 @app.post("/recommendations/based-on-movies")
-def get_recommendations_based_on_movies(movie_ids: list[int], limit: int = 10):
+def get_recommendations_based_on_movies(movie_ids: list[int], limit: int = 10, refresh: bool = False):
     """
     Get recommendations based on a list of movie IDs (e.g., from user's watchlist).
     Uses content-based filtering to find similar movies.
@@ -431,6 +431,15 @@ def get_recommendations_based_on_movies(movie_ids: list[int], limit: int = 10):
         return [int(x) for x in movies_df['movieId'].head(limit).values] if movies_df is not None else []
 
     try:
+        import random
+        import time
+        
+        # Seed random - use different seed when refresh is True
+        if refresh:
+            random.seed(int(time.time() * 1000))
+        else:
+            random.seed(sum(movie_ids))  # Consistent results based on watchlist
+        
         # Collect similarity scores for all watchlist movies
         all_similar = {}
         input_movie_set = set(movie_ids)
@@ -459,10 +468,21 @@ def get_recommendations_based_on_movies(movie_ids: list[int], limit: int = 10):
                             all_similar[similar_movie_id] = score
 
         if all_similar:
-            # Sort by similarity score and return top recommendations
+            # Sort by similarity score
             sorted_movies = sorted(all_similar.items(), key=lambda x: x[1], reverse=True)
-            result = [int(movie_id) for movie_id, score in sorted_movies[:limit]]
-            logger.info(f"Recommendations based on {len(movie_ids)} watchlist movies: {result}")
+            
+            # Add randomization: shuffle movies with similar scores when refreshing
+            if refresh:
+                # Group by similar scores (within 0.05 threshold) and shuffle within groups
+                result_pool = sorted_movies[:limit * 3]  # Get more candidates
+                random.shuffle(result_pool)
+                # Re-sort with some randomness
+                result_pool.sort(key=lambda x: x[1] + random.uniform(-0.1, 0.1), reverse=True)
+                result = [int(movie_id) for movie_id, score in result_pool[:limit]]
+            else:
+                result = [int(movie_id) for movie_id, score in sorted_movies[:limit]]
+            
+            logger.info(f"Recommendations based on {len(movie_ids)} watchlist movies (refresh={refresh}): {result}")
             return result
 
         # Fallback if no similar movies found
@@ -483,6 +503,7 @@ class PersonalizedRequest(BaseModel):
     ratedMovies: Optional[List[RatedMovie]] = []
     limit: int = 10
     userId: Optional[int] = None  # Added for user-specific randomization
+    refresh: Optional[bool] = False  # When True, generate different results
 
 
 @app.post("/recommendations/personalized")
@@ -500,11 +521,15 @@ def get_personalized_recommendations(request: PersonalizedRequest):
         preferred_genres = set(g.lower() for g in request.preferredGenres)
         rated_movie_ids = set(rm.movieId for rm in request.ratedMovies) if request.ratedMovies else set()
         
-        logger.info(f"[Personalized] User: {request.userId}, Genres: {preferred_genres}, Rated movies: {len(rated_movie_ids)}")
+        logger.info(f"[Personalized] User: {request.userId}, Genres: {preferred_genres}, Rated movies: {len(rated_movie_ids)}, Refresh: {request.refresh}")
         
-        # Seed random with userId for consistent but user-specific results
+        # Seed random - use different seed when refresh is True
         import random
-        if request.userId:
+        import time
+        if request.refresh:
+            # Use timestamp for random results when refreshing
+            random.seed(int(time.time() * 1000))
+        elif request.userId:
             random.seed(request.userId)
         else:
             # Fallback: use hash of preferences for some variation

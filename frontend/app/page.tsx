@@ -79,7 +79,7 @@ export default function Home() {
     setRefreshing(true);
     try {
       const [recRes, genresRes, watchAgainRes] = await Promise.all([
-        api.get('/recommendations/for-you').catch(() => ({ data: [] })),
+        api.get('/recommendations/for-you?refresh=true').catch(() => ({ data: [] })),
         api.get('/recommendations/top-genres').catch(() => ({ data: [] })),
         api.get('/recommendations/watch-again').catch(() => ({ data: [] }))
       ]);
