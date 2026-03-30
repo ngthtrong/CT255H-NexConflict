@@ -77,13 +77,16 @@ export default function Home() {
     if (refreshing) return;
     
     setRefreshing(true);
+    console.log('[Refresh] Starting refresh recommendations...');
     try {
       const [recRes, genresRes, watchAgainRes] = await Promise.all([
-        api.get('/recommendations/for-you?refresh=true').catch(() => ({ data: [] })),
-        api.get('/recommendations/top-genres').catch(() => ({ data: [] })),
-        api.get('/recommendations/watch-again').catch(() => ({ data: [] }))
+        api.get('/recommendations/for-you?refresh=true').catch((e) => { console.error('[Refresh] for-you error:', e); return { data: [] }; }),
+        api.get('/recommendations/top-genres').catch((e) => { console.error('[Refresh] top-genres error:', e); return { data: [] }; }),
+        api.get('/recommendations/watch-again').catch((e) => { console.error('[Refresh] watch-again error:', e); return { data: [] }; })
       ]);
 
+      console.log('[Refresh] Results:', { forYou: recRes.data?.length, topGenres: genresRes.data?.length, watchAgain: watchAgainRes.data?.length });
+      
       setRecommendedMovies(recRes.data || []);
       setTopGenresMovies(genresRes.data || []);
       setWatchAgainMovies(watchAgainRes.data || []);
@@ -160,29 +163,31 @@ export default function Home() {
           {showPersonalized && (
             <>
               {/* Row 1: Recommended For You (SVD / AI based) */}
-              {recommendedMovies.length > 0 && (
-                <div className="mt-20">
-                  <div className="flex items-center justify-between mb-6">
-                    <h2 className="text-2xl font-bold text-white flex items-center gap-2">
-                      <span className="text-red-500">⭐</span> Recommended For You
-                    </h2>
-                    <button
-                      onClick={refreshRecommendations}
-                      disabled={refreshing}
-                      className="flex items-center gap-2 px-4 py-2 bg-zinc-800 hover:bg-zinc-700 disabled:bg-zinc-900 text-white rounded-lg transition-colors"
-                      title="Phân tích lại và gợi ý phim mới"
-                    >
-                      <span className={`text-lg ${refreshing ? 'animate-spin' : ''}`}>🔄</span>
-                      <span className="text-sm">{refreshing ? 'Đang phân tích...' : 'Gợi ý lại'}</span>
-                    </button>
-                  </div>
+              <div className="mt-20">
+                <div className="flex items-center justify-between mb-6">
+                  <h2 className="text-2xl font-bold text-white flex items-center gap-2">
+                    <span className="text-red-500">⭐</span> Recommended For You
+                  </h2>
+                  <button
+                    onClick={refreshRecommendations}
+                    disabled={refreshing}
+                    className="flex items-center gap-2 px-4 py-2 bg-zinc-800 hover:bg-zinc-700 disabled:bg-zinc-900 text-white rounded-lg transition-colors"
+                    title="Phân tích lại và gợi ý phim mới"
+                  >
+                    <span className={`text-lg ${refreshing ? 'animate-spin' : ''}`}>🔄</span>
+                    <span className="text-sm">{refreshing ? 'Đang phân tích...' : 'Gợi ý lại'}</span>
+                  </button>
+                </div>
+                {recommendedMovies.length > 0 ? (
                   <div className="grid grid-cols-2 gap-x-4 gap-y-8 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
                     {recommendedMovies.map((movie) => (
                       <MovieCard key={movie.id} movie={movie} />
                     ))}
                   </div>
-                </div>
-              )}
+                ) : (
+                  <p className="text-zinc-500">Nhấn "Gợi ý lại" để nhận gợi ý phim dựa trên đánh giá của bạn.</p>
+                )}
+              </div>
 
               {/* Row 2: Top Genres (based on user's favorite genres from onboarding) */}
               {topGenresMovies.length > 0 && (

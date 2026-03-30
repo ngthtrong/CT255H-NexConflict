@@ -436,7 +436,7 @@ def get_recommendations_based_on_movies(movie_ids: list[int], limit: int = 10, r
         
         # Seed random - use different seed when refresh is True
         if refresh:
-            random.seed(int(time.time() * 1000))
+            random.seed(int(time.time() * 1000000))  # Use microseconds for more variation
         else:
             random.seed(sum(movie_ids))  # Consistent results based on watchlist
         
@@ -471,21 +471,32 @@ def get_recommendations_based_on_movies(movie_ids: list[int], limit: int = 10, r
             # Sort by similarity score
             sorted_movies = sorted(all_similar.items(), key=lambda x: x[1], reverse=True)
             
-            # Add randomization: shuffle movies with similar scores when refreshing
+            # Add randomization when refreshing
             if refresh:
-                # Group by similar scores (within 0.05 threshold) and shuffle within groups
-                result_pool = sorted_movies[:limit * 3]  # Get more candidates
-                random.shuffle(result_pool)
-                # Re-sort with some randomness
-                result_pool.sort(key=lambda x: x[1] + random.uniform(-0.1, 0.1), reverse=True)
+                # Get a larger pool of candidates (top 100 or all if less)
+                pool_size = min(len(sorted_movies), 100)
+                result_pool = list(sorted_movies[:pool_size])
+                
+                # Add significant randomness to scores
+                for i in range(len(result_pool)):
+                    movie_id, score = result_pool[i]
+                    # Add random factor proportional to score
+                    random_factor = random.uniform(-0.3, 0.3) * score
+                    result_pool[i] = (movie_id, score + random_factor)
+                
+                # Re-sort with randomized scores
+                result_pool.sort(key=lambda x: x[1], reverse=True)
                 result = [int(movie_id) for movie_id, score in result_pool[:limit]]
+                
+                logger.info(f"[Watchlist-Refresh] Pool size: {pool_size}, Result: {result}")
             else:
                 result = [int(movie_id) for movie_id, score in sorted_movies[:limit]]
+                logger.info(f"[Watchlist-NoRefresh] Result: {result}")
             
-            logger.info(f"Recommendations based on {len(movie_ids)} watchlist movies (refresh={refresh}): {result}")
             return result
 
         # Fallback if no similar movies found
+        logger.warning("[Watchlist] No similar movies found, using fallback")
         return [int(x) for x in movies_df['movieId'].head(limit).values]
 
     except Exception as e:
@@ -574,8 +585,18 @@ def get_personalized_recommendations(request: PersonalizedRequest):
                                 all_similar[movie_id] *= (1 + 0.2 * genre_matches)
                     
                     sorted_movies = sorted(all_similar.items(), key=lambda x: x[1], reverse=True)
-                    result = [int(movie_id) for movie_id, score in sorted_movies[:request.limit]]
-                    logger.info(f"[Personalized-Similarity] Recommendations: {result}")
+                    
+                    # Add randomization when refresh is True
+                    if request.refresh:
+                        # Get more candidates and shuffle with some randomness in scoring
+                        candidates = sorted_movies[:request.limit * 3]
+                        random.shuffle(candidates)
+                        candidates.sort(key=lambda x: x[1] + random.uniform(-0.15, 0.15), reverse=True)
+                        result = [int(movie_id) for movie_id, score in candidates[:request.limit]]
+                    else:
+                        result = [int(movie_id) for movie_id, score in sorted_movies[:request.limit]]
+                    
+                    logger.info(f"[Personalized-Similarity] Recommendations (refresh={request.refresh}): {result}")
                     return result
         
         # Strategy 2: Genre-based filtering - find movies matching user's preferred genres
