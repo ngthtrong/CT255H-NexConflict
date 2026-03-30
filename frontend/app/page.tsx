@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import Navbar from './components/Navbar';
 import MovieCard from './components/MovieCard';
@@ -24,6 +24,7 @@ export default function Home() {
   const [watchAgainMovies, setWatchAgainMovies] = useState<Movie[]>([]);
   const [loading, setLoading] = useState(true);
   const [errorDetails, setErrorDetails] = useState<string>('');
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -70,6 +71,28 @@ export default function Home() {
       fetchData();
     }
   }, [user, authLoading]);
+
+  // Function to refresh recommendations
+  const refreshRecommendations = useCallback(async () => {
+    if (refreshing) return;
+    
+    setRefreshing(true);
+    try {
+      const [recRes, genresRes, watchAgainRes] = await Promise.all([
+        api.get('/recommendations/for-you').catch(() => ({ data: [] })),
+        api.get('/recommendations/top-genres').catch(() => ({ data: [] })),
+        api.get('/recommendations/watch-again').catch(() => ({ data: [] }))
+      ]);
+
+      setRecommendedMovies(recRes.data || []);
+      setTopGenresMovies(genresRes.data || []);
+      setWatchAgainMovies(watchAgainRes.data || []);
+    } catch (error) {
+      console.error('Failed to refresh recommendations', error);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [refreshing]);
 
   // Determine if user should see personalized content
   const showPersonalized = user && user.onboardingCompleted;
@@ -138,10 +161,21 @@ export default function Home() {
             <>
               {/* Row 1: Recommended For You (SVD / AI based) */}
               {recommendedMovies.length > 0 && (
-                <div className="mt-12">
-                  <h2 className="text-2xl font-bold text-white mb-6 flex items-center gap-2">
-                    <span className="text-red-500">⭐</span> Recommended For You
-                  </h2>
+                <div className="mt-20">
+                  <div className="flex items-center justify-between mb-6">
+                    <h2 className="text-2xl font-bold text-white flex items-center gap-2">
+                      <span className="text-red-500">⭐</span> Recommended For You
+                    </h2>
+                    <button
+                      onClick={refreshRecommendations}
+                      disabled={refreshing}
+                      className="flex items-center gap-2 px-4 py-2 bg-zinc-800 hover:bg-zinc-700 disabled:bg-zinc-900 text-white rounded-lg transition-colors"
+                      title="Phân tích lại và gợi ý phim mới"
+                    >
+                      <span className={`text-lg ${refreshing ? 'animate-spin' : ''}`}>🔄</span>
+                      <span className="text-sm">{refreshing ? 'Đang phân tích...' : 'Gợi ý lại'}</span>
+                    </button>
+                  </div>
                   <div className="grid grid-cols-2 gap-x-4 gap-y-8 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
                     {recommendedMovies.map((movie) => (
                       <MovieCard key={movie.id} movie={movie} />

@@ -36,6 +36,12 @@ export default function Navbar() {
                 <Link href="/watchlist" className="text-sm font-medium text-zinc-300 hover:text-white">
                   My List
                 </Link>
+                <Link href="/my-ratings" className="text-sm font-medium text-zinc-300 hover:text-white">
+                  My Ratings
+                </Link>
+                <Link href="/settings" className="text-sm font-medium text-zinc-300 hover:text-white">
+                  Settings
+                </Link>
                 <Link href="/profile" className="text-sm font-medium text-zinc-300 hover:text-white">
                   Profile
                 </Link>
@@ -123,6 +129,12 @@ export default function Navbar() {
               <>
                 <Link href="/watchlist" className="text-sm font-medium text-zinc-300 hover:text-white" onClick={() => setShowMobileMenu(false)}>
                   My List
+                </Link>
+                <Link href="/my-ratings" className="text-sm font-medium text-zinc-300 hover:text-white" onClick={() => setShowMobileMenu(false)}>
+                  My Ratings
+                </Link>
+                <Link href="/settings" className="text-sm font-medium text-zinc-300 hover:text-white" onClick={() => setShowMobileMenu(false)}>
+                  Settings
                 </Link>
                 <Link href="/profile" className="text-sm font-medium text-zinc-300 hover:text-white" onClick={() => setShowMobileMenu(false)}>
                   Profile

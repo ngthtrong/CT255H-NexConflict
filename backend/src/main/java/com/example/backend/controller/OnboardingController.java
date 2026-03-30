@@ -186,6 +186,41 @@ public class OnboardingController {
         ));
     }
 
+    /**
+     * Update user's favorite genres
+     */
+    @PutMapping("/update-genres")
+    public ResponseEntity<?> updateGenres(@RequestBody UpdateGenresRequest request) {
+        User user = getCurrentUser();
+
+        // Validate request
+        if (request.getGenres() == null || request.getGenres().size() < 3) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Please select at least 3 genres"));
+        }
+
+        // Validate all genres are valid
+        for (String genre : request.getGenres()) {
+            if (!ALL_GENRES.contains(genre)) {
+                return ResponseEntity.badRequest().body(Map.of("error", "Invalid genre: " + genre));
+            }
+        }
+
+        // Clear existing preferences for this user
+        List<UserPreference> existingPrefs = userPreferenceRepository.findByUserId(user.getId());
+        userPreferenceRepository.deleteAll(existingPrefs);
+
+        // Save new selected genres
+        for (String genre : request.getGenres()) {
+            UserPreference pref = new UserPreference(user, genre);
+            userPreferenceRepository.save(pref);
+        }
+
+        return ResponseEntity.ok(Map.of(
+                "message", "Genres updated successfully",
+                "genres", request.getGenres()
+        ));
+    }
+
     private User getCurrentUser() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         String email = auth.getName();
@@ -233,6 +268,18 @@ public class OnboardingController {
 
         public void setRating(Double rating) {
             this.rating = rating;
+        }
+    }
+
+    public static class UpdateGenresRequest {
+        private List<String> genres;
+
+        public List<String> getGenres() {
+            return genres;
+        }
+
+        public void setGenres(List<String> genres) {
+            this.genres = genres;
         }
     }
 }
