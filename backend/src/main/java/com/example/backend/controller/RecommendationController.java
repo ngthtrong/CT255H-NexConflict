@@ -9,6 +9,8 @@ import com.example.backend.repository.RatingRepository;
 import com.example.backend.repository.UserPreferenceRepository;
 import com.example.backend.repository.UserRepository;
 import com.example.backend.service.RecommendationService;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
@@ -42,12 +44,18 @@ public class RecommendationController {
     }
 
     @GetMapping("/for-you")
-    public List<Movie> getRecommendationsForUser(@RequestParam(defaultValue = "false") boolean refresh) {
+    public ResponseEntity<List<Movie>> getRecommendationsForUser(@RequestParam(defaultValue = "false") boolean refresh) {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         String email = auth.getName();
         User user = userRepository.findByEmail(email).orElseThrow(() -> new RuntimeException("User not found"));
 
-        return recommendationService.getRecommendationsForUser(user, refresh);
+        RecommendationService.RecommendationTraceResult result = recommendationService.getRecommendationsForUserWithTrace(user, refresh);
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.add("X-Recommendation-Flow", result.flow());
+        headers.add("X-Recommendation-Model", result.model());
+
+        return ResponseEntity.ok().headers(headers).body(result.movies());
     }
 
     @GetMapping("/similar/{movieId}")

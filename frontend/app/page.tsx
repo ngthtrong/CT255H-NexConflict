@@ -25,6 +25,16 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [errorDetails, setErrorDetails] = useState<string>('');
   const [refreshing, setRefreshing] = useState(false);
+  const [recommendationTrace, setRecommendationTrace] = useState<{ flow: string; model: string } | null>(null);
+
+  const applyRecommendationTrace = (response: any, source: string) => {
+    const flow = response?.headers?.['x-recommendation-flow'];
+    const model = response?.headers?.['x-recommendation-model'];
+    if (flow && model) {
+      setRecommendationTrace({ flow, model });
+      console.log(`[${source}] Recommendation Flow: ${flow}, Model: ${model}`);
+    }
+  };
 
   useEffect(() => {
     const fetchData = async () => {
@@ -42,6 +52,7 @@ export default function Home() {
             api.get('/recommendations/watch-again').catch(() => ({ data: [] }))
           ]);
 
+          applyRecommendationTrace(recRes, 'InitialLoad');
           setRecommendedMovies(recRes.data || []);
           setTopGenresMovies(genresRes.data || []);
           setWatchAgainMovies(watchAgainRes.data || []);
@@ -84,6 +95,8 @@ export default function Home() {
         api.get('/recommendations/top-genres').catch((e) => { console.error('[Refresh] top-genres error:', e); return { data: [] }; }),
         api.get('/recommendations/watch-again').catch((e) => { console.error('[Refresh] watch-again error:', e); return { data: [] }; })
       ]);
+
+      applyRecommendationTrace(recRes, 'Refresh');
 
       console.log('[Refresh] Results:', { forYou: recRes.data?.length, topGenres: genresRes.data?.length, watchAgain: watchAgainRes.data?.length });
       
@@ -165,9 +178,16 @@ export default function Home() {
               {/* Row 1: Recommended For You (SVD / AI based) */}
               <div className="mt-20">
                 <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-2xl font-bold text-white flex items-center gap-2">
-                    <span className="text-red-500">⭐</span> Recommended For You
-                  </h2>
+                  <div>
+                    <h2 className="text-2xl font-bold text-white flex items-center gap-2">
+                      <span className="text-red-500">⭐</span> Recommended For You
+                    </h2>
+                    {recommendationTrace && (
+                      <p className="mt-1 text-xs text-zinc-400">
+                        Flow: {recommendationTrace.flow} | Model: {recommendationTrace.model}
+                      </p>
+                    )}
+                  </div>
                   <button
                     onClick={refreshRecommendations}
                     disabled={refreshing}

@@ -74,7 +74,8 @@ public class RatingController {
                     RatingResponse response = new RatingResponse(rating.getId(), movieId, rating.getRating());
                     return ResponseEntity.ok(response);
                 })
-                .orElse(ResponseEntity.notFound().build());
+                // Không xem là lỗi khi user chưa rating phim này; trả về rating = 0 để frontend hiển thị trạng thái chưa đánh giá.
+                .orElse(ResponseEntity.ok(new RatingResponse(null, movieId, 0.0)));
     }
 
     @GetMapping("/movie/{movieId}")

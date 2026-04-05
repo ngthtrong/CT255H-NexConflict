@@ -92,9 +92,15 @@ ratings_df = None
 movie_id_to_index = {}
 index_to_movie_id = {}
 active_cf_model = None     # 'svd', 'mf', or None
+current_model_dir = None   # Actual directory used to load model artifacts
 
 # --- Paths ---
-MODEL_DIR = os.path.join(os.path.dirname(__file__), 'models')
+BASE_MODEL_DIR = os.path.join(os.path.dirname(__file__), 'models')
+DEFAULT_MODEL_DIR = os.path.join(BASE_MODEL_DIR, 'v2')
+FALLBACK_MODEL_DIR = os.path.join(BASE_MODEL_DIR, 'v1')
+
+# Ưu tiên models/v2; có thể override bằng biến môi trường MODEL_DIR
+MODEL_DIR = os.getenv('MODEL_DIR', DEFAULT_MODEL_DIR)
 
 # --- Helper Functions ---
 def find_file(filename):
@@ -114,19 +120,27 @@ def load_models():
     """Load pre-trained models từ thư mục models/"""
     global svd_model, mf_model, mf_config, mf_mappings, mf_global_mean
     global cosine_sim_matrix, movies_df, ratings_df
-    global movie_id_to_index, index_to_movie_id, active_cf_model
+    global movie_id_to_index, index_to_movie_id, active_cf_model, current_model_dir
 
-    if not os.path.exists(MODEL_DIR):
-        logger.warning(f"Thư mục models/ không tồn tại: {MODEL_DIR}")
-        logger.warning("Hãy chạy 'python train.py' trước để train model!")
-        return False
+    model_dir = MODEL_DIR
+    if not os.path.exists(model_dir):
+        logger.warning(f"Thư mục model không tồn tại: {model_dir}")
+        if model_dir == DEFAULT_MODEL_DIR and os.path.exists(FALLBACK_MODEL_DIR):
+            model_dir = FALLBACK_MODEL_DIR
+            logger.warning(f"⚠️ Fallback sang model cũ tại: {model_dir}")
+        else:
+            logger.warning("Hãy chuẩn bị model artifacts trước khi chạy AI service")
+            return False
+
+    current_model_dir = model_dir
+    logger.info(f"📦 Đang load model artifacts từ: {model_dir}")
 
     loaded = False
 
     # === COLLABORATIVE FILTERING MODELS ===
     
     # Option 1: Load SVD model (Surprise) - ưu tiên nếu có
-    svd_path = os.path.join(MODEL_DIR, 'svd_model.pkl')
+    svd_path = os.path.join(model_dir, 'svd_model.pkl')
     if os.path.exists(svd_path):
         try:
             svd_model = joblib.load(svd_path)
@@ -142,8 +156,8 @@ def load_models():
     
     # Option 2: Load PyTorch MF model (GPU-trained) - fallback nếu không có SVD
     if svd_model is None and TORCH_AVAILABLE:
-        mf_path = os.path.join(MODEL_DIR, 'mf_model_gpu.pt')
-        mf_mappings_path = os.path.join(MODEL_DIR, 'mappings_gpu.pkl')
+        mf_path = os.path.join(model_dir, 'mf_model_gpu.pt')
+        mf_mappings_path = os.path.join(model_dir, 'mappings_gpu.pkl')
         
         if os.path.exists(mf_path) and os.path.exists(mf_mappings_path):
             try:
@@ -172,7 +186,7 @@ def load_models():
                 mf_model = None
 
     # Load ratings DataFrame
-    ratings_path = os.path.join(MODEL_DIR, 'ratings_df.pkl')
+    ratings_path = os.path.join(model_dir, 'ratings_df.pkl')
     if os.path.exists(ratings_path):
         ratings_df = joblib.load(ratings_path)
         logger.info(f"✅ Đã load ratings DataFrame ({len(ratings_df)} rows)")
@@ -180,20 +194,20 @@ def load_models():
     # === CONTENT-BASED MODEL ===
     
     # Load cosine similarity matrix
-    cosine_path = os.path.join(MODEL_DIR, 'cosine_sim_matrix.pkl')
+    cosine_path = os.path.join(model_dir, 'cosine_sim_matrix.pkl')
     if os.path.exists(cosine_path):
         cosine_sim_matrix = joblib.load(cosine_path)
         logger.info(f"✅ Đã load Cosine Similarity matrix: {cosine_sim_matrix.shape}")
         loaded = True
 
     # Load movies DataFrame
-    movies_pkl_path = os.path.join(MODEL_DIR, 'movies_df.pkl')
+    movies_pkl_path = os.path.join(model_dir, 'movies_df.pkl')
     if os.path.exists(movies_pkl_path):
         movies_df = joblib.load(movies_pkl_path)
         logger.info(f"✅ Đã load movies DataFrame ({len(movies_df)} phim)")
 
     # Load mappings (content_mappings.pkl từ notebook)
-    mapping_path = os.path.join(MODEL_DIR, 'content_mappings.pkl')
+    mapping_path = os.path.join(model_dir, 'content_mappings.pkl')
     if os.path.exists(mapping_path):
         mappings = joblib.load(mapping_path)
         movie_id_to_index = mappings['movie_id_to_index']
@@ -294,6 +308,7 @@ def startup_event():
 @app.get("/")
 def read_root():
     models_status = {
+        "model_dir": current_model_dir or MODEL_DIR,
         "collaborative_filtering": active_cf_model,  # 'svd', 'mf', or None
         "svd": svd_model is not None,
         "pytorch_mf": mf_model is not None,
@@ -303,7 +318,7 @@ def read_root():
     return {"status": "AI Service Running", "models": models_status}
 
 @app.get("/recommendations/{user_id}")
-def get_recommendations(user_id: int, limit: int = 10):
+def get_recommendations(user_id: int, limit: int = 10, strict: bool = False):
     """
     Get personalized recommendations using collaborative filtering (SVD or MF) 
     or content-based filtering as fallback.
@@ -317,6 +332,12 @@ def get_recommendations(user_id: int, limit: int = 10):
         if active_cf_model == 'svd' and svd_model is not None and ratings_df is not None:
             all_movie_ids = movies_df['movieId'].unique()
             user_ratings = ratings_df[ratings_df['userId'] == user_id]
+
+            # strict=True: chỉ trả kết quả khi user có history thực trong training data
+            if strict and user_ratings.empty:
+                logger.info(f"[SVD-Strict] User {user_id} không có lịch sử rating trong training set")
+                return []
+
             rated_movies = set(user_ratings['movieId'].values)
 
             predictions = []
@@ -369,7 +390,14 @@ def get_recommendations(user_id: int, limit: int = 10):
                     logger.info(f"[MF-PyTorch] Recommendations for user {user_id}: {result}")
                     return result
 
+            if strict:
+                logger.info(f"[MF-Strict] User {user_id} không có trong training mappings")
+                return []
+
         # === Fallback: Content-based / Random ===
+        if strict:
+            return []
+
         movie_ids = [int(x) for x in movies_df['movieId'].head(limit * 3).values]
         import random
         random.seed(user_id)
@@ -648,6 +676,7 @@ def get_personalized_recommendations(request: PersonalizedRequest):
 def health_check():
     return {
         "status": "healthy",
+        "model_dir": current_model_dir or MODEL_DIR,
         "collaborative_filtering": active_cf_model,
         "svd_model": svd_model is not None,
         "pytorch_mf_model": mf_model is not None,
